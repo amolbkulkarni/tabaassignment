@@ -1,0 +1,64 @@
+reviews_data <- read.csv('F://ISB//TABA//TABA_GROUP_ASSIGNMENT//New_car_reviews.csv',stringsAsFactors = FALSE)
+
+df_car_review <- select(reviews_data, brand_Name, review)
+
+ud_model <- udpipe_download_model(language = "english")
+ud_model <- udpipe_load_model(ud_model$file_model)
+x <- udpipe_annotate(ud_model, x = df_car_review$review)
+x <- as.data.frame(x)
+
+
+
+#Option 1: Extracting only nouns
+stats <- subset(x, upos %in% "NOUN")
+stats <- txt_freq(x = stats$lemma)
+library(lattice)
+stats$key <- factor(stats$key, levels = rev(stats$key))
+barchart(key ~ freq, data = head(stats, 30), col = "cadetblue", main = "Most occurring nouns", xlab = "Freq")
+
+#Option 2: Collocation & co-occurrences
+## Collocation (words following one another)
+stats <- keywords_collocation(x = x, 
+                              term = "token", group = c("doc_id", "paragraph_id", "sentence_id"),
+                              ngram_max = 4)
+## Co-occurrences: How frequent do words occur in the same sentence, in this case only nouns or adjectives
+stats <- cooccurrence(x = subset(x, upos %in% c("NOUN", "ADJ")), 
+                      term = "lemma", group = c("doc_id", "paragraph_id", "sentence_id"))
+
+
+tidy_car_reviews <- df_car_review %>%
+  mutate(linenumber = row_number()) %>%
+  unnest_tokens(word, review)%>%
+  filter(nchar(word) > 3)%>%
+  group_by(brand_Name) %>%
+  anti_join(custom_stop_words)%>%
+  ungroup()
+
+library(textdata)
+
+car_review_bing <- tidy_car_reviews %>%
+  inner_join(get_sentiments("nrc"))
+
+review_polarity_bing <- car_review_bing %>%
+  anti_join(custom_stop_words)%>%
+  group_by(brand_Name,word, sentiment) %>%
+  count(word, sentiment) %>%
+  filter(sentiment %in% c("positive",
+                          "negative"))
+
+stats%>%left_join(review_polarity_bing, by=c(term1='word'))%>%
+  group_by(brand_Name)%>%
+  filter(!term1 %in% custom_stop_words$word)%>%
+  filter(!term2 %in% custom_stop_words$word)%>%
+  filter(!term2 %in% review_polarity_bing$word)%>%
+  #filter(term2 %in% c('airbag', 'interiors','headlamps','exterior','headlamp','voice', 'command', 'boot', 'space', 'panoramic', 'sunroof', 'infotainment', 'system', 'price range','music', 'grill', 'price','touchscreen','money','fog'))%>%
+  filter(!term2 %in% c('comparison','cars','nice','Suv','road','angle','highway','time','owner','cruiser','initial','multiple','Nice','product','similar','round','tag','bad','initial','pleasure','licence','dream'))%>%
+  filter(cooc>80)%>%
+  filter(!nchar(sentiment)<4)%>%
+  ggplot(aes(term2,n,fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() + theme(legend.position = "none") +
+  xlab(NULL) +
+  ggtitle("Sentiment by features") +
+  coord_flip()+
+  facet_wrap(~brand_Name, ncol = 1, scales = "free_x")     
