@@ -297,8 +297,10 @@ df%>%filter(feature=="driving experience")%>%select(sentence,sent_sentiment)
 #--------------------------------------------------------------------------#
 # For Q2.4.which is about Attributes/ features which are best evoking customer's emotional response 
 
+#getting the reviews from data collected in csv earlier
 df_car_review <- select(reviews_data, brand_Name, review)
 
+#tokenizing the reviews with filtering words which has length less than3 and grouping by 3 different brands we have. At last removing all the stopwords from corpus.
 tidy_car_reviews <- df_car_review %>%
   mutate(linenumber = row_number()) %>%
   unnest_tokens(word, review)%>%
@@ -323,19 +325,12 @@ stats <- keywords_collocation(x = x,
 ## Co-occurrences: How frequent do words occur in the same sentence, in this case only nouns or adjectives
 stats <- cooccurrence(x = subset(x, upos %in% c("NOUN", "ADJ")),
                       term = "lemma", group = c("doc_id", "paragraph_id", "sentence_id"))
-## Co-occurrences: How frequent do words follow one another
-stats <- cooccurrence(x = x$lemma,
-                      relevant = x$upos %in% c("NOUN", "ADJ"))
-## Co-occurrences: How frequent do words follow one another even if we would skip 2 words in between
-stats <- cooccurrence(x = x$lemma,
-                      relevant = x$upos %in% c("NOUN", "ADJ"), skipgram = 2)
-head(stats)
 
-library(textdata)
-
+#creating the dataset by applying sentiments from tidyr package and nrc keyset
 car_review_bing <- tidy_car_reviews %>%
   inner_join(get_sentiments("nrc"))
 
+#filtering the dataset we got by applying get_sentiments to remove stopwords and adding count of each occurrance and leaving all other sentiments other than positives and negatives.
 review_polarity_bing <- car_review_bing %>%
   anti_join(custom_stop_words)%>%
   group_by(brand_Name,word, sentiment) %>%
@@ -343,6 +338,7 @@ review_polarity_bing <- car_review_bing %>%
   filter(sentiment %in% c("positive",
                           "negative"))
 
+#finally plotting the data with ggplot to segregate positive and negative sentiments by different colors and applying other filters to get clean meaningfull insights.
 stats%>%left_join(review_polarity_bing, by=c(term1='word'))%>%
   group_by(brand_Name)%>%
   filter(!term1 %in% custom_stop_words$word)%>%
